@@ -3,7 +3,24 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Only version tags start a release. A bare "v" prefix would also match
+      # names like "vendor-audit", which would start a run that can only fail
+      # the tag/version check.
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to run against (for example v0.2.0b1)"
+        required: true
+        type: string
+      dry_run:
+        description: "Run every check but skip the PyPI upload"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -11,25 +28,50 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - name: Report the release mode
+        env:
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          echo "event_name     = ${EVENT}"
+          echo "inputs.dry_run = '${DRY_RUN}'"
+          if [ "${EVENT}" != "push" ] && [ "${DRY_RUN}" != "false" ]; then
+            echo "mode           = DRY RUN (the PyPI upload and everything after it will be skipped)"
+          else
+            echo "mode           = REAL RELEASE (the PyPI upload will run)"
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
       - name: Validate tag against package version
         shell: bash
+        env:
+          REF_NAME: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
         run: |
           package_version="$(python -c \
             "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${REF_NAME#v}"
           test "$tag_version" = "$package_version" || {
             echo "Tag version $tag_version does not match package version $package_version" >&2
             exit 1
           }
+          echo "release version verified: $package_version"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install build twine
+      # Nothing is built or published from a tag whose own checks fail. These
+      # are the commands CI runs, repeated here on the exact tagged commit.
+      - run: python -m pip install -e .[dev]
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: bandit -q -r src -c pyproject.toml
+      - run: pytest
       - run: python -m build
       - run: twine check dist/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-package-distributions
           path: dist/
@@ -38,13 +80,28 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # Skipped on a dry run. `inputs.dry_run` is empty on a push event,
+    # so the event check comes first: a push is always a real release.
+    if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
     environment:
       name: pypi
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: python-package-distributions
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Refuse to upload during a dry run
+        env:
+          EVENT: ${{ github.event_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${EVENT}" != "push" ] && [ "${DRY_RUN}" != "false" ]; then
+            echo "This job must not run during a dry run. Failing instead of uploading."
+            exit 1
+          fi
+          echo "Confirmed a real release: event=${EVENT} dry_run='${DRY_RUN}'"
+      # Pinned by commit SHA rather than the release/v1 branch, which is the
+      # most mutable reference available, on the step that uploads to PyPI.
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
