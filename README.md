@@ -2,7 +2,7 @@
 
 AIMeter measures what AI costs, what it accomplishes, and how efficiently it converts compute and model usage into successful outcomes.
 
-Current release candidate: `0.2.0b1` public Beta software with documented limitations. It is not yet tagged or published.
+Latest release: `0.2.0b1` on [PyPI](https://pypi.org/project/aimeter-oss/) (`pip install aimeter-oss`), public Beta software with documented limitations. The previous name, `openaimeter`, remains as a deprecated compatibility shim.
 
 AIMeter is a Beta, vendor-neutral FinOps and measurement toolkit for AI models, agents, tools, retrieval systems, workflows, and infrastructure. It is local-first and offline-capable. It does not provide invoice accuracy, accounting compliance, automatic savings, production readiness, perfect price data, full OpenTelemetry conformance, or full FOCUS conformance.
 
@@ -160,6 +160,8 @@ This Beta includes local ecosystem-oriented helpers for audit-log ingestion, orc
 
 AIMeter uses bounded UTF-8 JSON/JSONL/YAML loading, duplicate-key rejection, duplicate record-ID rejection, parameterized SQLite statements, CSV formula escaping, HTML escaping, metadata and structural depth limits, and local-first storage. SQLite batch ingestion is transactional. Do not store secrets in usage records.
 
+**Advisories.** None have been published for `aimeter-oss`. See [SECURITY.md](SECURITY.md) for how to report a vulnerability; published advisories appear at [github.com/sekacorn/AIMeter/security/advisories](https://github.com/sekacorn/AIMeter/security/advisories).
+
 ## Determinism and Storage
 
 Records require a stable `record_id`; validation does not generate one or mutate the caller's input. JSON/JSONL imports reject duplicate IDs before aggregation, and SQLite rejects duplicate IDs atomically. JSONL is append-only local storage; SQLite is a local convenience index, not an accounting ledger or enterprise warehouse. Equivalent valid records and pricing tables produce deterministic ordering and six-decimal monetary serialization.
@@ -169,6 +171,10 @@ Records require a stable `record_id`; validation does not generate one or mutate
 Pricing tables may become stale; calculated cost may differ from invoices; local inference estimates depend on supplied assumptions; infrastructure allocation may be approximate; missing components make totals incomplete; provider token semantics differ; estimated tokens are not provider-reported tokens; outcome quality depends on correct instrumentation; cost per success depends on outcome definitions; projected savings are not realized savings; forecasts are simple deterministic projections; anomaly detection is rule-based; currency conversion requires supplied rates; SQLite is for local use, not a large warehouse; adapters depend on external APIs; OpenTelemetry mapping may be incomplete; FOCUS export is experimental unless formally verified; AIMeter does not enforce budgets itself; schema and APIs may change before 1.0.
 
 ## Roadmap
+
+### Beta
+
+0.2.0b1 (latest) is the first Beta. It hardened the accounting core so unknown cost and outcome data stay incomplete through aggregates and cost-per-success reporting; pricing tables reject duplicate YAML keys and overlapping validity windows; out-of-window pricing and missing billed usage produce unknown calculations; JSON/JSONL ingestion rejects duplicate keys and record IDs with bounded input handling; and SQLite batch ingestion is atomic.
 
 ### Completed Alpha Milestones
 
@@ -184,7 +190,7 @@ Pricing tables may become stale; calculated cost may differ from invoices; local
 
 ### Planned
 
-The current pre-Beta hardening work makes unknown cost and outcome states explicit, rejects ambiguous pricing and duplicate input, and preserves deterministic local ingestion. Future work may include optional PostgreSQL storage, provider invoice imports, signed pricing manifests, organization-level allocation rules, chargeback and showback exports, a dashboard starter, and richer cost-export compatibility.
+Future work may include optional PostgreSQL storage, provider invoice imports, signed pricing manifests, organization-level allocation rules, chargeback and showback exports, a dashboard starter, and richer cost-export compatibility.
 
 1.0 will require a stable measurement schema, compatibility policy, verified OpenTelemetry profile, verified cost-export profile, migration policy, security review, and an enterprise-scale storage adapter.
 
